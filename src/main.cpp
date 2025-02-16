@@ -80,10 +80,15 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
     ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
     ImGui_ImplSDLRenderer3_Init(renderer);
 
+    chip8::init();
+    chip8::load("C:/Users/tiago.ferreira/Downloads/Pong.ch8");
     return SDL_APP_CONTINUE;
 }
 
 SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event* event) {
+
+    chip8::update();
+
     auto* app = (AppContext*)appstate;
     
     ImGui_ImplSDL3_ProcessEvent(event);
@@ -101,54 +106,46 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 
     auto* app = (AppContext*)appstate;
 
+    auto renderer = app->renderer;
+
     ImGuiIO& io = ImGui::GetIO();
 
     ImGui::NewFrame();
 
-    SDL_RenderClear(app->renderer);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
 
+    SDL_SetRenderDrawColor(renderer, 255, 0, 255, 255);
 
-    int x = 20;
-    int y = 20;
-    SDL_SetRenderDrawColor(app->renderer, 255, 255, 255, 255);
-    SDL_RenderPoint(app->renderer, x, y);
-    // Try to up-res image
-    {
+    // // Try to up-res image
+    // {
             
-            static float f = 0.0f;
-            static int counter = 0;
+    //         static float f = 0.0f;
+    //         static int counter = 0;
 
-            ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
+    //         ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
             
-            ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-            ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-            ImGui::Checkbox("Another Window", &show_another_window);
+    //         ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
+    //         ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
+    //         ImGui::Checkbox("Another Window", &show_another_window);
 
-            ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-            ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
+    //         ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+    //         ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
 
-            if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-                counter++;
-            ImGui::SameLine();
-            ImGui::Text("counter = %d", counter);
+    //         if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
+    //             counter++;
+    //         ImGui::SameLine();
+    //         ImGui::Text("counter = %d", counter);
 
-            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-            ImGui::End();
-        }
+    //         ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+    //         ImGui::End();
+    //     }
 
     ImGui::Render();
     ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), app->renderer);
 
     SDL_RenderPresent(app->renderer);
 
-    // Update and Render additional Platform Windows
-    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-    {
-        ImGui::UpdatePlatformWindows();
-        ImGui::RenderPlatformWindowsDefault();
-        // TODO for OpenGL: restore current GL context.
-    }
-    
     return app->app_quit;
 }
 
