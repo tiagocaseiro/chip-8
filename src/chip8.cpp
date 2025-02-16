@@ -15,8 +15,6 @@ namespace chip8
     using register_t    = unsigned char;
     using stack_entry_t = unsigned short;
 
-    static opcode_t opcode;
-
     static unsigned char memory[4096];
 
     static register_t V[16];
@@ -24,7 +22,7 @@ namespace chip8
     static unsigned short I;
     static unsigned short pc;
 
-    static unsigned char gfx [64 * 32];
+    static draw_buffer gfx;
 
     static unsigned char delay_timer;
     static unsigned char sound_timer;
@@ -43,7 +41,58 @@ namespace chip8
         ranges::fill(buffer, 0);
     }
 
-    static void clear_screen_and_return(opcode_t opcode)
+    int get_memory_address_from_opcode(const opcode_t opcode)
+    {
+        return opcode & 0x0FFF;
+    }
+   
+    register_t& get_first_register_from_opcode(const opcode_t opcode)
+    {
+        auto index = opcode & 0x0F00;
+        index >>= 8;
+        return V[index];
+    }
+
+    register_t& get_second_register_from_opcode(const opcode_t opcode)
+    {
+        auto index = opcode & 0x00F0;
+        index >>= 4;
+        return V[index];
+    }
+
+    int get_second_register_index_from_opcode(const opcode_t opcode)
+    {
+        auto second_register = opcode & 0x00F0;
+        second_register = second_register >> 4;
+        return second_register;
+    }
+    
+    int get_value_from_opcode(const opcode_t opcode)
+    {
+        return opcode & 0x00FF;
+    }
+
+    void next_instruction()
+    {
+        pc+=2;
+    }
+
+    void jump_next_instruction()
+    {
+        pc+=4;
+    }
+
+    static void return_from_subroutine()
+    {
+        sp--; // Go back in the stack to previous valid entry
+        if (sp < &stack[0])
+        {
+            std::out_of_range("Stack pointer decremented to outside the range of the stack");
+        }
+        pc = *sp; // Point pc to saved memory address
+    }
+    
+    static void clear_screen_and_return(const opcode_t opcode)
     {
         switch (opcode)
         {
@@ -51,25 +100,29 @@ namespace chip8
             clear_buffer(gfx);
             return;
         case 0x00EE: // Return from subroutine
-            sp--; // Go back in the stack to previous valid entry
-            if (sp < &stack[0])
-            {
-                std::out_of_range("Stack pointer decremented to outside the range of the stack");
-            }
-            pc = *sp; // Point pc to saved memory address
+            return_from_subroutine();
             return;
         }
     }
 
-    static void jump_to(opcode_t opcode)
+    static void jump_to(const opcode_t opcode)
     {
-        auto memory_address = opcode & 0x0FFF; // Extract memory address from opcode
-        pc = memory_address; // Point pc to new memory address
+        pc = get_memory_address_from_opcode(opcode); 
     }
 
-    static void call_func(opcode_t)
+    static void return_from_subroutine(const opcode_t opcode)
     {
-        auto memory_address = opcode & 0x0FFF; // Extract memory address from opcode
+        sp--; // Go back in the stack to previous valid entry
+        if (sp < &stack[0])
+        {
+            std::out_of_range("Stack pointer decremented to outside the range of the stack");
+        }
+        pc = *sp; // Point pc to saved memory address
+    }
+    
+    static void call_func(const opcode_t opcode)
+    {
+        auto memory_address = get_memory_address_from_opcode(opcode); // Extract memory address from opcode
 
         *sp = pc; // Assign current sp to current pc address
         sp++; // Go up next available entry stack
@@ -80,116 +133,133 @@ namespace chip8
         pc = memory_address; // Have pc point to new memory address
     }
 
-    static void jump_if_equal(opcode_t opcode)
+    static void jump_if_equal(const opcode_t opcode)
     {
-        auto register_index = (opcode & 0x0F00) >> 8; // Extract register index
-        auto value          = opcode & 0x00FF; // Extract value
+        auto& reg = get_first_register_from_opcode(opcode); // Extract register index
+        auto value          = get_value_from_opcode(opcode); // Extract value
 
-        auto register_value = V[register_index];
-
-        if (register_value != value)
+        if (reg != value)
         {
             return;
         }
 
-        pc+=2; // Jump a whole instruction
+        jump_next_instruction(); // Jump a whole instruction
     }
 
-    static void jump_if_not_equal(opcode_t opcode)
+    static void jump_if_not_equal(const opcode_t opcode)
     {
-        auto register_index = (opcode & 0x0F00) >> 8; // Extract register index
-        auto value          = opcode & 0x00FF; // Extract value
+        auto& reg   = get_first_register_from_opcode(opcode); // Extract register index
+        auto value  = get_value_from_opcode(opcode); // Extract value
 
-        auto register_value = V[register_index];
-
-        if (register_value == value)
+        if (reg == value)
         {
             return;
         }
 
-        pc+=2; // Jump a whole instruction
+        jump_next_instruction(); // Jump a whole instruction
     }
 
-    static void jump_if_registers_equal(opcode_t opcode)
+    static void jump_if_registers_equal(const opcode_t opcode)
     {
-        auto register_index_1 = (opcode & 0x0F00) >> 8; // Extract register index 1
-        auto register_index_2 = (opcode & 0x00F0) >> 4; // Extract register index 2
+        auto& register_1 = get_first_register_from_opcode(opcode); // Extract register index 1
+        auto& register_2 = get_second_register_from_opcode(opcode); // Extract register index 2
 
-        auto register_value_1 = V[register_index_1];
-        auto register_value_2 = V[register_index_2];
-
-        if (register_value_1 != register_value_2)
+        if (register_1 != register_2)
         {
             return;
         }
 
-        pc+=2; // Jump a whole instruction
+        jump_next_instruction(); // Jump a whole instruction
     }
 
-    static void set_register_to_value(opcode_t opcode)
+    static void set_register_to_value(const opcode_t opcode)
     {
-        auto register_index = (opcode & 0x0F00) >> 8; // Extract register index
-        auto new_register_value  = (opcode & 0x00FF); // Extract value
+        auto& reg =  get_first_register_from_opcode(opcode); // Extract register index
+        auto new_value  = get_value_from_opcode(opcode); // Extract value
 
-        V[register_index] = new_register_value;
+        reg = new_value;
+
+        next_instruction();
     }
 
-    static void func7(opcode_t)
+    static void add_assign_register_to_value(const opcode_t opcode)
     {
-        return;
+        auto& reg = get_first_register_from_opcode(opcode);
+        
+        reg+= get_value_from_opcode(opcode);
+
+        next_instruction();
     }
 
-    static void func8(opcode_t)
+    static void assign_to_register(const opcode_t opcode)
     {
+        auto& register_1 = get_first_register_from_opcode(opcode);
+        auto& register_2 = get_second_register_from_opcode(opcode);
+
+        switch(opcode & 0x000F)
+        {
+            case 0:
+                register_1 = register_2;
+                return;
+            case 1:
+                register_1 |= register_2;
+                return;
+            case 2:
+                register_1 &= register_2;
+                return;
+            case 3:
+                register_1 ^= register_2;
+                return;
+        }
+
         return;
     }
     
-    static void func9(opcode_t)
+    static void func9(const opcode_t)
     {
         return;
     }
 
-    static void funcA(opcode_t)
+    static void funcA(const opcode_t)
     {
         return;
     }
 
-    static void funcB(opcode_t)
+    static void funcB(const opcode_t)
     {
         return;
     }
 
-    static void funcC(opcode_t)
+    static void funcC(const opcode_t)
     {
         return;
     }
 
-    static void funcD(opcode_t)
+    static void funcD(const opcode_t)
     {
         return;
     }
 
-    static void funcE(opcode_t)
+    static void funcE(const opcode_t)
     {
         return;
     }
 
-    static void funcF(opcode_t)
+    static void funcF(const opcode_t)
     {
         return;
     }
 
-    static std::function<void(opcode_t)> funcs[] = { 
+    static std::function<void(const opcode_t)> funcs[] = { 
                                        clear_screen_and_return, jump_to, call_func, jump_if_equal, 
-                                       jump_if_not_equal, jump_if_registers_equal, set_register_to_value, func7, 
-                                       func8, func9, funcA, funcB, 
+                                       jump_if_not_equal, jump_if_registers_equal, set_register_to_value, add_assign_register_to_value, 
+                                       assign_to_register, func9, funcA, funcB, 
                                        funcC, funcD, funcE, funcF
                                     };
 
-    void initialize()
+    void init()
     {   
         pc     = PROGRAM_OFFSET; // Program counter starts at 0x200
-        opcode = 0;              // Reset current opcode
         I      = 0;              // Reset index register
         sp     = &stack[0];      // Reset stack pointer
 
@@ -222,7 +292,9 @@ namespace chip8
 
         auto f_index = first_half_opcode >> 4;
         funcs[f_index](opcode);
-
+ 
+        std::cout << std::hex << opcode << std::endl;
+        
         // Update timers
         if (delay_timer > 0)
         {
@@ -239,13 +311,18 @@ namespace chip8
         }
     }
 
-    void load(const char* program)
+    void load(const char* path)
     {
         // Load program into memory
-        std::ifstream is(program, std::ios::binary);
+        std::ifstream is(path, std::ios::binary);
         auto begin = &memory[0];
         begin+=PROGRAM_OFFSET;
         std::streamsize max_count = sizeof(memory) - PROGRAM_OFFSET;
         is.read(reinterpret_cast<char*>(begin), max_count);
+    }
+
+    const draw_buffer& gfx_buffer()
+    {
+        return gfx;
     }
 }

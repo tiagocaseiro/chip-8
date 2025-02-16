@@ -2,9 +2,10 @@
 
 namespace chip8
 {
-    void initialize();
+    using draw_buffer = unsigned char[64 * 32];
+
+    void init();
     void update();
-    void load(const char*);
-    bool draw_frame();
-    bool clear_screen();
+    void load(const char* path);
+    const draw_buffer& gfx_buffer();
 };
