@@ -19,6 +19,8 @@ namespace chip8
 
     static register_t V[16];
 
+    static register_t& flag_register = V[15];
+
     static unsigned short I;
     static unsigned short pc;
 
@@ -36,17 +38,18 @@ namespace chip8
 
     static constexpr auto PROGRAM_OFFSET = 0x200;
     
-    static void clear_buffer(auto& buffer)
+    static inline void clear_buffer(auto& buffer)
     {
-        ranges::fill(buffer, 0);
+        unsigned char zero = 0;
+        ranges::fill(buffer, zero);
     }
 
-    int get_memory_address_from_opcode(const opcode_t opcode)
+    static inline unsigned short get_memory_address_from_opcode(const opcode_t opcode)
     {
-        return opcode & 0x0FFF;
+        return static_cast<unsigned short>(opcode & 0x0FFF);
     }
    
-    register_t& get_first_register_from_opcode(const opcode_t opcode)
+    static inline register_t& get_first_register_from_opcode(const opcode_t opcode)
     {
         auto index = opcode & 0x0F00;
         index >>= 8;
@@ -67,9 +70,9 @@ namespace chip8
         return second_register;
     }
     
-    int get_value_from_opcode(const opcode_t opcode)
+    register_t get_value_from_opcode(const opcode_t opcode)
     {
-        return opcode & 0x00FF;
+        return static_cast<register_t>(opcode & 0x00FF);
     }
 
     void next_instruction()
@@ -96,10 +99,10 @@ namespace chip8
     {
         switch (opcode)
         {
-        case 0x00E0: // Clear screen
+        case 0xE0: // Clear screen
             clear_buffer(gfx);
             return;
-        case 0x00EE: // Return from subroutine
+        case 0xEE: // Return from subroutine
             return_from_subroutine();
             return;
         }
@@ -110,16 +113,6 @@ namespace chip8
         pc = get_memory_address_from_opcode(opcode); 
     }
 
-    static void return_from_subroutine(const opcode_t opcode)
-    {
-        sp--; // Go back in the stack to previous valid entry
-        if (sp < &stack[0])
-        {
-            std::out_of_range("Stack pointer decremented to outside the range of the stack");
-        }
-        pc = *sp; // Point pc to saved memory address
-    }
-    
     static void call_func(const opcode_t opcode)
     {
         auto memory_address = get_memory_address_from_opcode(opcode); // Extract memory address from opcode
@@ -193,23 +186,86 @@ namespace chip8
 
     static void assign_to_register(const opcode_t opcode)
     {
-        auto& register_1 = get_first_register_from_opcode(opcode);
-        auto& register_2 = get_second_register_from_opcode(opcode);
+
 
         switch(opcode & 0x000F)
         {
-            case 0:
+            case 0x0:
+            {
+                register_t& register_1       = get_first_register_from_opcode(opcode);
+                const register_t& register_2 = get_second_register_from_opcode(opcode);
                 register_1 = register_2;
                 return;
-            case 1:
+            }
+            case 0x1:
+            {
+                register_t& register_1       = get_first_register_from_opcode(opcode);
+                const register_t& register_2 = get_second_register_from_opcode(opcode);
                 register_1 |= register_2;
                 return;
-            case 2:
+            }
+            case 0x2:
+            {
+                register_t& register_1       = get_first_register_from_opcode(opcode);
+                const register_t& register_2 = get_second_register_from_opcode(opcode);
                 register_1 &= register_2;
                 return;
-            case 3:
+            }
+            case 0x3:
+            {
+                register_t& register_1       = get_first_register_from_opcode(opcode);
+                const register_t& register_2 = get_second_register_from_opcode(opcode);
                 register_1 ^= register_2;
                 return;
+            }
+            case 0x4:
+            {
+                register_t& register_1       = get_first_register_from_opcode(opcode);
+                const register_t& register_2 = get_second_register_from_opcode(opcode);
+                int temp = register_1;
+                temp+= register_2;
+                register_1 = static_cast<register_t>(temp);
+
+                // Check if digits passed char size were flipped
+                auto is_overflow = temp >> 8 != 0;
+                if (is_overflow) 
+                {
+                    flag_register = 1;
+                    return;                
+                }
+                flag_register = 0;
+                return;      
+            }
+            case 0x5:
+            {
+                register_t& register_1       = get_first_register_from_opcode(opcode);
+                const register_t& register_2 = get_second_register_from_opcode(opcode);
+                int temp = register_1;
+                temp+= register_2;
+                register_1 = static_cast<register_t>(temp);
+
+                // Check if digits passed char size were flipped
+                auto is_overflow = temp >> 8 != 0;
+                if (is_overflow) 
+                {
+                    flag_register = 1;
+                    return;                
+                }
+                flag_register = 0;
+                return;      
+            }
+            case 0x6:
+            {
+                throw std::invalid_argument("Unsupported operation");
+            }
+            case 0x7:
+            {
+                throw std::invalid_argument("Unsupported operation");
+            }
+            case 0xE:
+            {
+                throw std::invalid_argument("Unsupported operation");
+            }        
         }
 
         return;
@@ -217,37 +273,37 @@ namespace chip8
     
     static void func9(const opcode_t)
     {
-        return;
+        throw std::invalid_argument("Unsupported operation");
     }
 
     static void funcA(const opcode_t)
     {
-        return;
+        throw std::invalid_argument("Unsupported operation");
     }
 
     static void funcB(const opcode_t)
     {
-        return;
+        throw std::invalid_argument("Unsupported operation");
     }
 
     static void funcC(const opcode_t)
     {
-        return;
+        throw std::invalid_argument("Unsupported operation");
     }
 
     static void funcD(const opcode_t)
     {
-        return;
+        throw std::invalid_argument("Unsupported operation");
     }
 
     static void funcE(const opcode_t)
     {
-        return;
+        throw std::invalid_argument("Unsupported operation");
     }
 
     static void funcF(const opcode_t)
     {
-        return;
+        throw std::invalid_argument("Unsupported operation");
     }
 
     static std::function<void(const opcode_t)> funcs[] = { 
@@ -288,7 +344,7 @@ namespace chip8
         auto first_half_opcode = memory[pc];
         auto second_half_opcode = memory[pc+1];
 
-        opcode_t opcode = first_half_opcode << 8 | second_half_opcode;
+        opcode_t opcode = static_cast<opcode_t>(first_half_opcode << 8 | second_half_opcode);
 
         auto f_index = first_half_opcode >> 4;
         funcs[f_index](opcode);

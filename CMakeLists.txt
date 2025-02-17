@@ -20,7 +20,6 @@ add_executable(${EXECUTABLE_NAME})
 target_sources(${EXECUTABLE_NAME} 
 PRIVATE 
     src/main.cpp
-    src/chip8.cpp
     imgui/imgui.cpp
     imgui/imgui_draw.cpp 
     imgui/imgui_tables.cpp 
@@ -32,6 +31,12 @@ PRIVATE
 # Set C++ version
 target_compile_features(${EXECUTABLE_NAME} PUBLIC cxx_std_20)
 
+add_library(source src/chip8.cpp)
+
+target_compile_features(source PUBLIC cxx_std_20)
+
+target_compile_options(source PRIVATE /Wall /WX)
+
 target_include_directories(${EXECUTABLE_NAME} PUBLIC imgui)
 target_include_directories(${EXECUTABLE_NAME} PUBLIC imgui/backends)
 
@@ -42,6 +47,7 @@ add_subdirectory(SDL EXCLUDE_FROM_ALL)
 
 # Link SDL to our executable. This also makes its include directory available to us. 
 target_link_libraries(${EXECUTABLE_NAME} PUBLIC 
-    SDL3::SDL3              # If using satelite libraries, SDL must be the last item in the list. 
+    SDL3::SDL3              # If using satelite libraries, SDL must be the last item in the list.
+    source 
 )
 target_compile_definitions(${EXECUTABLE_NAME} PUBLIC SDL_MAIN_USE_CALLBACKS)
