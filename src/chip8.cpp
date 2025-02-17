@@ -51,8 +51,13 @@ namespace chip8
    
     static inline register_t& get_first_register_from_opcode(const opcode_t opcode)
     {
+        std::cout << __FUNCTION__ << std::endl;
+
         auto index = opcode & 0x0F00;
         index >>= 8;
+
+        std::cout << "index " << index << std::endl;
+
         return V[index];
     }
 
@@ -87,6 +92,8 @@ namespace chip8
 
     static void return_from_subroutine()
     {
+        std::cout << __FUNCTION__ << std::endl;
+
         sp--; // Go back in the stack to previous valid entry
         if (sp < &stack[0])
         {
@@ -97,6 +104,8 @@ namespace chip8
     
     static void clear_screen_and_return(const opcode_t opcode)
     {
+        std::cout << __FUNCTION__ << std::endl;
+
         switch (opcode)
         {
         case 0xE0: // Clear screen
@@ -110,11 +119,15 @@ namespace chip8
 
     static void jump_to(const opcode_t opcode)
     {
+        std::cout << __FUNCTION__ << std::endl;
+
         pc = get_memory_address_from_opcode(opcode); 
     }
 
     static void call_func(const opcode_t opcode)
     {
+        std::cout << __FUNCTION__ << std::endl;
+
         auto memory_address = get_memory_address_from_opcode(opcode); // Extract memory address from opcode
 
         *sp = pc; // Assign current sp to current pc address
@@ -128,6 +141,8 @@ namespace chip8
 
     static void jump_if_equal(const opcode_t opcode)
     {
+        std::cout << __FUNCTION__ << std::endl;
+
         auto& reg = get_first_register_from_opcode(opcode); // Extract register index
         auto value          = get_value_from_opcode(opcode); // Extract value
 
@@ -141,6 +156,8 @@ namespace chip8
 
     static void jump_if_not_equal(const opcode_t opcode)
     {
+        std::cout << __FUNCTION__ << std::endl;
+
         auto& reg   = get_first_register_from_opcode(opcode); // Extract register index
         auto value  = get_value_from_opcode(opcode); // Extract value
 
@@ -154,6 +171,8 @@ namespace chip8
 
     static void jump_if_registers_equal(const opcode_t opcode)
     {
+        std::cout << __FUNCTION__ << std::endl;
+
         auto& register_1 = get_first_register_from_opcode(opcode); // Extract register index 1
         auto& register_2 = get_second_register_from_opcode(opcode); // Extract register index 2
 
@@ -167,16 +186,21 @@ namespace chip8
 
     static void set_register_to_value(const opcode_t opcode)
     {
+        std::cout << __FUNCTION__  << 1 << std::endl;
+
         auto& reg =  get_first_register_from_opcode(opcode); // Extract register index
         auto new_value  = get_value_from_opcode(opcode); // Extract value
 
         reg = new_value;
+        std::cout << __FUNCTION__  << 2 << std::endl;
 
         next_instruction();
     }
 
     static void add_assign_register_to_value(const opcode_t opcode)
     {
+        std::cout << __FUNCTION__ << std::endl;
+
         auto& reg = get_first_register_from_opcode(opcode);
         
         reg+= get_value_from_opcode(opcode);
@@ -186,7 +210,7 @@ namespace chip8
 
     static void assign_to_register(const opcode_t opcode)
     {
-
+        std::cout << __FUNCTION__ << std::endl;
 
         switch(opcode & 0x000F)
         {
@@ -240,18 +264,16 @@ namespace chip8
             {
                 register_t& register_1       = get_first_register_from_opcode(opcode);
                 const register_t& register_2 = get_second_register_from_opcode(opcode);
-                int temp = register_1;
-                temp+= register_2;
-                register_1 = static_cast<register_t>(temp);
+                auto is_underflow = register_2 > register_1;
+                register_1 -= register_2;
 
                 // Check if digits passed char size were flipped
-                auto is_overflow = temp >> 8 != 0;
-                if (is_overflow) 
+                if (is_underflow) 
                 {
-                    flag_register = 1;
+                    flag_register = 0;
                     return;                
                 }
-                flag_register = 0;
+                flag_register = 1;
                 return;      
             }
             case 0x6:
@@ -345,11 +367,13 @@ namespace chip8
         auto second_half_opcode = memory[pc+1];
 
         opcode_t opcode = static_cast<opcode_t>(first_half_opcode << 8 | second_half_opcode);
+        
+        std::cout << __FUNCTION__ << 1 << " "<< std::hex << opcode << std::endl;
 
         auto f_index = first_half_opcode >> 4;
         funcs[f_index](opcode);
  
-        std::cout << std::hex << opcode << std::endl;
+        std::cout << __FUNCTION__ << 2 << " "<< std::hex << opcode << std::endl;
         
         // Update timers
         if (delay_timer > 0)
