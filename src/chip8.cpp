@@ -293,14 +293,24 @@ namespace chip8
         return;
     }
     
-    static void func9(const opcode_t)
+    static void jump_if_registers_not_equal(const opcode_t opcode)
     {
-        throw std::invalid_argument("Unsupported operation");
+        std::cout << __FUNCTION__ << std::endl;
+
+        auto& register_1 = get_first_register_from_opcode(opcode); // Extract register index 1
+        auto& register_2 = get_second_register_from_opcode(opcode); // Extract register index 2
+
+        if (register_1 == register_2)
+        {
+            return;
+        }
+
+        jump_next_instruction(); // Jump a whole instruction
     }
 
-    static void funcA(const opcode_t)
+    static void assign_address_register(const opcode_t opcode)
     {
-        throw std::invalid_argument("Unsupported operation");
+        I = get_memory_address_from_opcode(opcode);
     }
 
     static void funcB(const opcode_t)
@@ -331,7 +341,7 @@ namespace chip8
     static std::function<void(const opcode_t)> funcs[] = { 
                                        clear_screen_and_return, jump_to, call_func, jump_if_equal, 
                                        jump_if_not_equal, jump_if_registers_equal, set_register_to_value, add_assign_register_to_value, 
-                                       assign_to_register, func9, funcA, funcB, 
+                                       assign_to_register, jump_if_registers_not_equal, assign_address_register, funcB, 
                                        funcC, funcD, funcE, funcF
                                     };
 
