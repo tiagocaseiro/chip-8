@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <fstream>
 #include <sstream>
+#include <random>
 
 namespace chip8
 {
@@ -40,8 +41,8 @@ namespace chip8
     
     static inline void clear_buffer(auto& buffer)
     {
-        unsigned char zero = 0;
-        ranges::fill(buffer, zero);
+        static constexpr unsigned char ZERO = 0;
+        ranges::fill(buffer, ZERO);
     }
 
     static inline unsigned short get_memory_address_from_opcode(const opcode_t opcode)
@@ -68,16 +69,29 @@ namespace chip8
         return V[index];
     }
 
-    int get_second_register_index_from_opcode(const opcode_t opcode)
+    register_t get_value_from_opcode_nn(const opcode_t opcode)
     {
-        auto second_register = opcode & 0x00F0;
-        second_register = second_register >> 4;
-        return second_register;
+        std::cout << __FUNCTION__ << std::endl;
+        register_t value = static_cast<register_t>(opcode & 0x00FF);
+        std::cout << "Value from opcode " << static_cast<int>(value) << std::endl;
+        return value;
     }
-    
-    register_t get_value_from_opcode(const opcode_t opcode)
+
+    register_t get_value_from_opcode_n(const opcode_t opcode)
     {
-        return static_cast<register_t>(opcode & 0x00FF);
+        std::cout << __FUNCTION__ << std::endl;
+        register_t value = static_cast<register_t>(opcode & 0x000F);
+        std::cout << "Value from opcode " << static_cast<int>(value) << std::endl;
+        return value;
+    }
+
+    unsigned short get_value_from_opcode_nnn(const opcode_t opcode)
+    {
+        std::cout << __FUNCTION__ << std::endl;
+
+        unsigned short value = static_cast<unsigned short>(opcode & 0x0FFF);
+        std::cout << "Value from opcode " << static_cast<int>(value) << std::endl;
+        return value;
     }
 
     void next_instruction()
@@ -143,8 +157,8 @@ namespace chip8
     {
         std::cout << __FUNCTION__ << std::endl;
 
-        auto& reg = get_first_register_from_opcode(opcode); // Extract register index
-        auto value          = get_value_from_opcode(opcode); // Extract value
+        const auto reg   = get_first_register_from_opcode(opcode); // Extract register index
+        const auto value = get_value_from_opcode_nn(opcode); // Extract value
 
         if (reg != value)
         {
@@ -158,8 +172,8 @@ namespace chip8
     {
         std::cout << __FUNCTION__ << std::endl;
 
-        auto& reg   = get_first_register_from_opcode(opcode); // Extract register index
-        auto value  = get_value_from_opcode(opcode); // Extract value
+        const auto reg   = get_first_register_from_opcode(opcode); // Extract register index
+        const auto value = get_value_from_opcode_nn(opcode); // Extract value
 
         if (reg == value)
         {
@@ -173,8 +187,8 @@ namespace chip8
     {
         std::cout << __FUNCTION__ << std::endl;
 
-        auto& register_1 = get_first_register_from_opcode(opcode); // Extract register index 1
-        auto& register_2 = get_second_register_from_opcode(opcode); // Extract register index 2
+        const auto register_1 = get_first_register_from_opcode(opcode); // Extract register index 1
+        const auto register_2 = get_second_register_from_opcode(opcode); // Extract register index 2
 
         if (register_1 != register_2)
         {
@@ -186,13 +200,12 @@ namespace chip8
 
     static void set_register_to_value(const opcode_t opcode)
     {
-        std::cout << __FUNCTION__  << 1 << std::endl;
+        std::cout << __FUNCTION__ << std::endl;
 
-        auto& reg =  get_first_register_from_opcode(opcode); // Extract register index
-        auto new_value  = get_value_from_opcode(opcode); // Extract value
+        register_t& reg =  get_first_register_from_opcode(opcode); // Extract register index
+        register_t new_value  = get_value_from_opcode_nn(opcode); // Extract value
 
         reg = new_value;
-        std::cout << __FUNCTION__  << 2 << std::endl;
 
         next_instruction();
     }
@@ -203,7 +216,7 @@ namespace chip8
 
         auto& reg = get_first_register_from_opcode(opcode);
         
-        reg+= get_value_from_opcode(opcode);
+        reg+= get_value_from_opcode_nn(opcode);
 
         next_instruction();
     }
@@ -216,36 +229,36 @@ namespace chip8
         {
             case 0x0:
             {
-                register_t& register_1       = get_first_register_from_opcode(opcode);
-                const register_t& register_2 = get_second_register_from_opcode(opcode);
+                register_t& register_1      = get_first_register_from_opcode(opcode);
+                const register_t register_2 = get_second_register_from_opcode(opcode);
                 register_1 = register_2;
                 return;
             }
             case 0x1:
             {
-                register_t& register_1       = get_first_register_from_opcode(opcode);
-                const register_t& register_2 = get_second_register_from_opcode(opcode);
+                register_t& register_1      = get_first_register_from_opcode(opcode);
+                const register_t register_2 = get_second_register_from_opcode(opcode);
                 register_1 |= register_2;
                 return;
             }
             case 0x2:
             {
-                register_t& register_1       = get_first_register_from_opcode(opcode);
-                const register_t& register_2 = get_second_register_from_opcode(opcode);
+                register_t& register_1      = get_first_register_from_opcode(opcode);
+                const register_t register_2 = get_second_register_from_opcode(opcode);
                 register_1 &= register_2;
                 return;
             }
             case 0x3:
             {
                 register_t& register_1       = get_first_register_from_opcode(opcode);
-                const register_t& register_2 = get_second_register_from_opcode(opcode);
+                const register_t register_2 = get_second_register_from_opcode(opcode);
                 register_1 ^= register_2;
                 return;
             }
             case 0x4:
             {
                 register_t& register_1       = get_first_register_from_opcode(opcode);
-                const register_t& register_2 = get_second_register_from_opcode(opcode);
+                const register_t register_2 = get_second_register_from_opcode(opcode);
                 int temp = register_1;
                 temp+= register_2;
                 register_1 = static_cast<register_t>(temp);
@@ -263,7 +276,7 @@ namespace chip8
             case 0x5:
             {
                 register_t& register_1       = get_first_register_from_opcode(opcode);
-                const register_t& register_2 = get_second_register_from_opcode(opcode);
+                const register_t register_2 = get_second_register_from_opcode(opcode);
                 auto is_underflow = register_2 > register_1;
                 register_1 -= register_2;
 
@@ -297,8 +310,8 @@ namespace chip8
     {
         std::cout << __FUNCTION__ << std::endl;
 
-        auto& register_1 = get_first_register_from_opcode(opcode); // Extract register index 1
-        auto& register_2 = get_second_register_from_opcode(opcode); // Extract register index 2
+        const auto register_1 = get_first_register_from_opcode(opcode); // Extract register index 1
+        const auto register_2 = get_second_register_from_opcode(opcode); // Extract register index 2
 
         if (register_1 == register_2)
         {
@@ -310,21 +323,38 @@ namespace chip8
 
     static void assign_address_register(const opcode_t opcode)
     {
+        std::cout << __FUNCTION__ << std::endl;
         I = get_memory_address_from_opcode(opcode);
+        next_instruction();
     }
 
-    static void funcB(const opcode_t)
+    static void jump_to_address(const opcode_t opcode)
     {
-        throw std::invalid_argument("Unsupported operation");
+        const auto register_0 = static_cast<unsigned short>(V[0]);
+        const auto value = get_value_from_opcode_nnn(opcode);
+        pc += register_0;
+        pc += value;
     }
 
-    static void funcC(const opcode_t)
+    static void set_register_to_bitwise_and_of_random(const opcode_t opcode)
     {
-        throw std::invalid_argument("Unsupported operation");
+        static std::random_device rd;
+        static std::uniform_int_distribution<int> dist(0, 255);
+
+        register_t& reg   = get_first_register_from_opcode(opcode);
+        register_t value = get_value_from_opcode_nn(opcode); 
+
+        register_t rand = static_cast<register_t>(dist(rd));
+
+        reg = static_cast<register_t>(rand & value);
     }
 
-    static void funcD(const opcode_t)
+    static void draw_sprite(const opcode_t /*opcode*/)
     {
+        std::cout << __FUNCTION__ << std::endl;
+        // const register_t x      = get_first_register_from_opcode(opcode);
+        // const register_t y      = get_second_register_from_opcode(opcode);
+        // const register_t height = get_value_from_opcode_n(opcode);
         throw std::invalid_argument("Unsupported operation");
     }
 
@@ -341,8 +371,8 @@ namespace chip8
     static std::function<void(const opcode_t)> funcs[] = { 
                                        clear_screen_and_return, jump_to, call_func, jump_if_equal, 
                                        jump_if_not_equal, jump_if_registers_equal, set_register_to_value, add_assign_register_to_value, 
-                                       assign_to_register, jump_if_registers_not_equal, assign_address_register, funcB, 
-                                       funcC, funcD, funcE, funcF
+                                       assign_to_register, jump_if_registers_not_equal, assign_address_register, jump_to_address, 
+                                       set_register_to_bitwise_and_of_random, draw_sprite, funcE, funcF
                                     };
 
     void init()
@@ -372,20 +402,25 @@ namespace chip8
 
     void update()
     {        
+        std::cout << "############## UPDATE ##############" << std::endl;
+
         // Fetch Opcode
         auto first_half_opcode = memory[pc];
         auto second_half_opcode = memory[pc+1];
 
         opcode_t opcode = static_cast<opcode_t>(first_half_opcode << 8 | second_half_opcode);
-        
-        std::cout << __FUNCTION__ << 1 << " "<< std::hex << opcode << std::endl;
-
         auto f_index = first_half_opcode >> 4;
+        std::cout <<"opcode: " << std::hex << opcode << std::endl;
         funcs[f_index](opcode);
- 
-        std::cout << __FUNCTION__ << 2 << " "<< std::hex << opcode << std::endl;
-        
-        // Update timers
+        std::cout << "pc: " << pc << std::endl;
+        std::cout << "I: " << I << std::endl;
+        for (int i = 0; i != 15; i++)
+        {
+            std::cout << "register" << i << ": " << static_cast<int>(V[i]) << std::endl;
+        }
+        std::cout << "flag_register: " << static_cast<int>(flag_register) << std::endl;
+        std::cout << std::endl;
+
         if (delay_timer > 0)
         {
             delay_timer--;
