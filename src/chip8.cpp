@@ -358,12 +358,12 @@ namespace chip8
         throw std::invalid_argument("Unsupported operation");
     }
 
-    static void funcE(const opcode_t)
+    static void skip_by_key(const opcode_t /*opcode*/)
     {
         throw std::invalid_argument("Unsupported operation");
     }
 
-    static void funcF(const opcode_t)
+    static void funcF(const opcode_t /*opcode*/)
     {
         throw std::invalid_argument("Unsupported operation");
     }
@@ -372,7 +372,7 @@ namespace chip8
                                        clear_screen_and_return, jump_to, call_func, jump_if_equal, 
                                        jump_if_not_equal, jump_if_registers_equal, set_register_to_value, add_assign_register_to_value, 
                                        assign_to_register, jump_if_registers_not_equal, assign_address_register, jump_to_address, 
-                                       set_register_to_bitwise_and_of_random, draw_sprite, funcE, funcF
+                                       set_register_to_bitwise_and_of_random, draw_sprite, skip_by_key, funcF
                                     };
 
     void init()
