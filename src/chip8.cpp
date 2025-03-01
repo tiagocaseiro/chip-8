@@ -1,12 +1,14 @@
 #include "chip8.h"
 
+#include <algorithm>
+#include <bitset>
+#include <fstream>
+#include <functional>
 #include <ios>
 #include <iostream>
-#include <functional>
-#include <algorithm>
-#include <fstream>
-#include <sstream>
 #include <random>
+#include <sstream>
+#include <utility>
 
 namespace chip8
 {
@@ -38,19 +40,42 @@ namespace chip8
     static unsigned char key[16];
 
     static constexpr auto PROGRAM_OFFSET = 0x200;
-    
+
     static inline void clear_buffer(auto& buffer)
     {
         static constexpr unsigned char ZERO = 0;
         ranges::fill(buffer, ZERO);
     }
 
+    static bool paint_row_pixels_at(const int x, const int y, unsigned char memory_row)
+    {
+        static constexpr auto ROW_WIDTH = 8;
+
+        bool flipped = false;
+
+        for(auto i = 0; i != ROW_WIDTH; i++)
+        {
+            static constexpr auto FIRST_PIXEL_POSITION = 1 << 8;
+
+            // Only entries with 1 require action
+            if((memory_row & (FIRST_PIXEL_POSITION >> i)) == 0)
+            {
+                continue;
+            }
+
+            flipped |= gfx[y * 64 + x + i] == 1;
+            gfx[y * 64 + x + i] ^= 1;
+        }
+
+        return flipped;
+    }
+
     static inline unsigned short get_memory_address_from_opcode(const opcode_t opcode)
     {
         return static_cast<unsigned short>(opcode & 0x0FFF);
     }
-   
-    static inline register_t& get_first_register_from_opcode(const opcode_t opcode)
+
+    static register_t& get_first_register_from_opcode(const opcode_t opcode)
     {
         std::cout << __FUNCTION__ << std::endl;
 
@@ -96,12 +121,52 @@ namespace chip8
 
     void next_instruction()
     {
-        pc+=2;
+        pc += 2;
+    }
+
+    static void fill_registers_with_memory(const opcode_t opcode)
+    {
+
+        register_t& end = get_first_register_from_opcode(opcode);
+
+        auto i = 0;
+        for(register_t* it = &V[0]; it <= &end; it++)
+        {
+            *it = memory[I + i];
+            i++;
+        }
+
+        next_instruction();
+    }
+
+    static void fill_memory_with_registers(const opcode_t opcode)
+    {
+
+        const register_t& end = get_first_register_from_opcode(opcode);
+
+        auto i = 0;
+        for(register_t* it = &V[0]; it <= &end; it++)
+        {
+            memory[I + i] = *it;
+            i++;
+        }
+
+        next_instruction();
+    }
+
+    static inline void store_bcd(const opcode_t opcode)
+    {
+        const register_t reg = get_first_register_from_opcode(opcode);
+        memory[I]            = static_cast<unsigned char>(reg / 100); // hundreds digit
+        memory[I + 1]        = static_cast<unsigned char>((reg - memory[I]) / 10);
+        memory[I + 2]        = static_cast<unsigned char>(reg - memory[I] - memory[I + 1]);
+
+        next_instruction();
     }
 
     void jump_next_instruction()
     {
-        pc+=4;
+        pc += 4;
     }
 
     static void return_from_subroutine()
@@ -109,25 +174,25 @@ namespace chip8
         std::cout << __FUNCTION__ << std::endl;
 
         sp--; // Go back in the stack to previous valid entry
-        if (sp < &stack[0])
+        if(sp < &stack[0])
         {
             std::out_of_range("Stack pointer decremented to outside the range of the stack");
         }
         pc = *sp; // Point pc to saved memory address
     }
-    
+
     static void clear_screen_and_return(const opcode_t opcode)
     {
         std::cout << __FUNCTION__ << std::endl;
 
-        switch (opcode)
+        switch(opcode)
         {
-        case 0xE0: // Clear screen
-            clear_buffer(gfx);
-            return;
-        case 0xEE: // Return from subroutine
-            return_from_subroutine();
-            return;
+            case 0xE0: // Clear screen
+                clear_buffer(gfx);
+                return;
+            case 0xEE: // Return from subroutine
+                return_from_subroutine();
+                return;
         }
     }
 
@@ -135,7 +200,7 @@ namespace chip8
     {
         std::cout << __FUNCTION__ << std::endl;
 
-        pc = get_memory_address_from_opcode(opcode); 
+        pc = get_memory_address_from_opcode(opcode);
     }
 
     static void call_func(const opcode_t opcode)
@@ -145,8 +210,8 @@ namespace chip8
         auto memory_address = get_memory_address_from_opcode(opcode); // Extract memory address from opcode
 
         *sp = pc; // Assign current sp to current pc address
-        sp++; // Go up next available entry stack
-        if (sp > &stack[STACK_SIZE-1])
+        sp++;     // Go up next available entry stack
+        if(sp > &stack[STACK_SIZE - 1])
         {
             std::out_of_range("Stack pointer incremented to outside the range of the stack");
         }
@@ -158,9 +223,9 @@ namespace chip8
         std::cout << __FUNCTION__ << std::endl;
 
         const auto reg   = get_first_register_from_opcode(opcode); // Extract register index
-        const auto value = get_value_from_opcode_nn(opcode); // Extract value
+        const auto value = get_value_from_opcode_nn(opcode);       // Extract value
 
-        if (reg != value)
+        if(reg != value)
         {
             return;
         }
@@ -173,9 +238,9 @@ namespace chip8
         std::cout << __FUNCTION__ << std::endl;
 
         const auto reg   = get_first_register_from_opcode(opcode); // Extract register index
-        const auto value = get_value_from_opcode_nn(opcode); // Extract value
+        const auto value = get_value_from_opcode_nn(opcode);       // Extract value
 
-        if (reg == value)
+        if(reg == value)
         {
             return;
         }
@@ -187,10 +252,10 @@ namespace chip8
     {
         std::cout << __FUNCTION__ << std::endl;
 
-        const auto register_1 = get_first_register_from_opcode(opcode); // Extract register index 1
+        const auto register_1 = get_first_register_from_opcode(opcode);  // Extract register index 1
         const auto register_2 = get_second_register_from_opcode(opcode); // Extract register index 2
 
-        if (register_1 != register_2)
+        if(register_1 != register_2)
         {
             return;
         }
@@ -202,8 +267,8 @@ namespace chip8
     {
         std::cout << __FUNCTION__ << std::endl;
 
-        register_t& reg =  get_first_register_from_opcode(opcode); // Extract register index
-        register_t new_value  = get_value_from_opcode_nn(opcode); // Extract value
+        register_t& reg      = get_first_register_from_opcode(opcode); // Extract register index
+        register_t new_value = get_value_from_opcode_nn(opcode);       // Extract value
 
         reg = new_value;
 
@@ -215,8 +280,8 @@ namespace chip8
         std::cout << __FUNCTION__ << std::endl;
 
         auto& reg = get_first_register_from_opcode(opcode);
-        
-        reg+= get_value_from_opcode_nn(opcode);
+
+        reg += get_value_from_opcode_nn(opcode);
 
         next_instruction();
     }
@@ -231,7 +296,7 @@ namespace chip8
             {
                 register_t& register_1      = get_first_register_from_opcode(opcode);
                 const register_t register_2 = get_second_register_from_opcode(opcode);
-                register_1 = register_2;
+                register_1                  = register_2;
                 return;
             }
             case 0x1:
@@ -250,44 +315,44 @@ namespace chip8
             }
             case 0x3:
             {
-                register_t& register_1       = get_first_register_from_opcode(opcode);
+                register_t& register_1      = get_first_register_from_opcode(opcode);
                 const register_t register_2 = get_second_register_from_opcode(opcode);
                 register_1 ^= register_2;
                 return;
             }
             case 0x4:
             {
-                register_t& register_1       = get_first_register_from_opcode(opcode);
+                register_t& register_1      = get_first_register_from_opcode(opcode);
                 const register_t register_2 = get_second_register_from_opcode(opcode);
-                int temp = register_1;
-                temp+= register_2;
+                int temp                    = register_1;
+                temp += register_2;
                 register_1 = static_cast<register_t>(temp);
 
                 // Check if digits passed char size were flipped
                 auto is_overflow = temp >> 8 != 0;
-                if (is_overflow) 
+                if(is_overflow)
                 {
                     flag_register = 1;
-                    return;                
+                    return;
                 }
                 flag_register = 0;
-                return;      
+                return;
             }
             case 0x5:
             {
-                register_t& register_1       = get_first_register_from_opcode(opcode);
+                register_t& register_1      = get_first_register_from_opcode(opcode);
                 const register_t register_2 = get_second_register_from_opcode(opcode);
-                auto is_underflow = register_2 > register_1;
+                auto is_underflow           = register_2 > register_1;
                 register_1 -= register_2;
 
                 // Check if digits passed char size were flipped
-                if (is_underflow) 
+                if(is_underflow)
                 {
                     flag_register = 0;
-                    return;                
+                    return;
                 }
                 flag_register = 1;
-                return;      
+                return;
             }
             case 0x6:
             {
@@ -300,20 +365,20 @@ namespace chip8
             case 0xE:
             {
                 throw std::invalid_argument("Unsupported operation");
-            }        
+            }
         }
 
         return;
     }
-    
+
     static void jump_if_registers_not_equal(const opcode_t opcode)
     {
         std::cout << __FUNCTION__ << std::endl;
 
-        const auto register_1 = get_first_register_from_opcode(opcode); // Extract register index 1
+        const auto register_1 = get_first_register_from_opcode(opcode);  // Extract register index 1
         const auto register_2 = get_second_register_from_opcode(opcode); // Extract register index 2
 
-        if (register_1 == register_2)
+        if(register_1 == register_2)
         {
             return;
         }
@@ -331,7 +396,7 @@ namespace chip8
     static void jump_to_address(const opcode_t opcode)
     {
         const auto register_0 = static_cast<unsigned short>(V[0]);
-        const auto value = get_value_from_opcode_nnn(opcode);
+        const auto value      = get_value_from_opcode_nnn(opcode);
         pc += register_0;
         pc += value;
     }
@@ -341,21 +406,32 @@ namespace chip8
         static std::random_device rd;
         static std::uniform_int_distribution<int> dist(0, 255);
 
-        register_t& reg   = get_first_register_from_opcode(opcode);
-        register_t value = get_value_from_opcode_nn(opcode); 
+        register_t& reg  = get_first_register_from_opcode(opcode);
+        register_t value = get_value_from_opcode_nn(opcode);
 
         register_t rand = static_cast<register_t>(dist(rd));
 
         reg = static_cast<register_t>(rand & value);
     }
 
-    static void draw_sprite(const opcode_t /*opcode*/)
+    static void draw_sprite(const opcode_t opcode)
     {
         std::cout << __FUNCTION__ << std::endl;
-        // const register_t x      = get_first_register_from_opcode(opcode);
-        // const register_t y      = get_second_register_from_opcode(opcode);
-        // const register_t height = get_value_from_opcode_n(opcode);
-        throw std::invalid_argument("Unsupported operation");
+        const int x      = get_first_register_from_opcode(opcode);
+        int y            = get_second_register_from_opcode(opcode);
+        const int height = get_value_from_opcode_n(opcode);
+        std::cout << x << " " << y << " " << height << std::endl;
+
+        bool pixel_flipped = false;
+        for(auto i = 0; i != height; i++)
+        {
+            pixel_flipped |= paint_row_pixels_at(x, y, memory[I + i]);
+            y++;
+        }
+
+        flag_register = pixel_flipped;
+
+        next_instruction();
     }
 
     static void skip_by_key(const opcode_t /*opcode*/)
@@ -363,23 +439,82 @@ namespace chip8
         throw std::invalid_argument("Unsupported operation");
     }
 
-    static void funcF(const opcode_t /*opcode*/)
+    static void misc(const opcode_t opcode)
     {
-        throw std::invalid_argument("Unsupported operation");
+        switch(get_value_from_opcode_nn(opcode))
+        {
+            case 0x07:
+            {
+                throw std::invalid_argument("Unsupported operation");
+                return;
+            }
+            case 0x0A:
+            {
+                throw std::invalid_argument("Unsupported operation");
+                return;
+            }
+            case 0x15:
+            {
+                throw std::invalid_argument("Unsupported operation");
+                return;
+            }
+            case 0x18:
+            {
+                throw std::invalid_argument("Unsupported operation");
+                return;
+            }
+            case 0x1E:
+            {
+                throw std::invalid_argument("Unsupported operation");
+                return;
+            }
+            case 0x29:
+            {
+                throw std::invalid_argument("Unsupported operation");
+                return;
+            }
+            case 0x33:
+            {
+                store_bcd(opcode);
+                return;
+            }
+            case 0x55:
+            {
+                fill_memory_with_registers(opcode);
+                return;
+            }
+            case 0x65:
+            {
+                fill_registers_with_memory(opcode);
+                return;
+            }
+        }
     }
 
-    static std::function<void(const opcode_t)> funcs[] = { 
-                                       clear_screen_and_return, jump_to, call_func, jump_if_equal, 
-                                       jump_if_not_equal, jump_if_registers_equal, set_register_to_value, add_assign_register_to_value, 
-                                       assign_to_register, jump_if_registers_not_equal, assign_address_register, jump_to_address, 
-                                       set_register_to_bitwise_and_of_random, draw_sprite, skip_by_key, funcF
-                                    };
+    static std::function<void(const opcode_t)> funcs[] = {
+        clear_screen_and_return,               // 0
+        jump_to,                               // 1
+        call_func,                             // 2
+        jump_if_equal,                         // 3
+        jump_if_not_equal,                     // 4
+        jump_if_registers_equal,               // 5
+        set_register_to_value,                 // 6
+        add_assign_register_to_value,          // 7
+        assign_to_register,                    // 8
+        jump_if_registers_not_equal,           // 9
+        assign_address_register,               // A
+        jump_to_address,                       // B
+        set_register_to_bitwise_and_of_random, // C
+        draw_sprite,                           // D
+        skip_by_key,                           // E
+        misc                                   // F
+    };
 
     void init()
-    {   
-        pc     = PROGRAM_OFFSET; // Program counter starts at 0x200
-        I      = 0;              // Reset index register
-        sp     = &stack[0];      // Reset stack pointer
+    {
+        pc = PROGRAM_OFFSET; // Program counter starts at 0x200
+        I  = 0;              // Reset index register
+        sp = &stack[0];      // Reset stack pointer
 
         // Clear display
         clear_buffer(gfx);
@@ -401,34 +536,34 @@ namespace chip8
     }
 
     void update()
-    {        
+    {
         std::cout << "############## UPDATE ##############" << std::endl;
 
         // Fetch Opcode
-        auto first_half_opcode = memory[pc];
-        auto second_half_opcode = memory[pc+1];
+        auto first_half_opcode  = memory[pc];
+        auto second_half_opcode = memory[pc + 1];
 
         opcode_t opcode = static_cast<opcode_t>(first_half_opcode << 8 | second_half_opcode);
-        auto f_index = first_half_opcode >> 4;
-        std::cout <<"opcode: " << std::hex << opcode << std::endl;
+        auto f_index    = first_half_opcode >> 4;
+        std::cout << "opcode: " << std::hex << opcode << std::endl;
         funcs[f_index](opcode);
         std::cout << "pc: " << pc << std::endl;
         std::cout << "I: " << I << std::endl;
-        for (int i = 0; i != 15; i++)
+        for(int i = 0; i != 15; i++)
         {
             std::cout << "register" << i << ": " << static_cast<int>(V[i]) << std::endl;
         }
         std::cout << "flag_register: " << static_cast<int>(flag_register) << std::endl;
         std::cout << std::endl;
 
-        if (delay_timer > 0)
+        if(delay_timer > 0)
         {
             delay_timer--;
         }
 
-        if (sound_timer > 0)
+        if(sound_timer > 0)
         {
-            if (sound_timer == 1)
+            if(sound_timer == 1)
             {
                 std::cout << "Beep" << std::endl;
             }
@@ -441,7 +576,7 @@ namespace chip8
         // Load program into memory
         std::ifstream is(path, std::ios::binary);
         auto begin = &memory[0];
-        begin+=PROGRAM_OFFSET;
+        begin += PROGRAM_OFFSET;
         std::streamsize max_count = sizeof(memory) - PROGRAM_OFFSET;
         is.read(reinterpret_cast<char*>(begin), max_count);
     }
@@ -450,4 +585,4 @@ namespace chip8
     {
         return gfx;
     }
-}
+} // namespace chip8
