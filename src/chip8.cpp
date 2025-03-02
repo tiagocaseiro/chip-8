@@ -261,6 +261,7 @@ namespace chip8
 
         if(reg != value)
         {
+            next_instruction();
             return;
         }
 
@@ -276,6 +277,7 @@ namespace chip8
 
         if(reg == value)
         {
+            next_instruction();
             return;
         }
 
@@ -291,6 +293,7 @@ namespace chip8
 
         if(register_1 != register_2)
         {
+            next_instruction();
             return;
         }
 
@@ -414,6 +417,7 @@ namespace chip8
 
         if(register_1 == register_2)
         {
+            next_instruction();
             return;
         }
 
