@@ -64,7 +64,7 @@ namespace chip8
 
     static inline void clear_buffer(auto& buffer)
     {
-        static constexpr unsigned char ZERO = 0;
+        static bool ZERO = 0;
         ranges::fill(buffer, ZERO);
     }
 
@@ -739,6 +739,16 @@ namespace chip8
         begin += PROGRAM_OFFSET;
         std::streamsize max_count = sizeof(memory) - PROGRAM_OFFSET;
         is.read(reinterpret_cast<char*>(begin), max_count);
+    }
+
+    void on_key_down(const int key_index)
+    {
+        key_state[key_index] = true;
+    }
+
+    void on_key_up(const int key_index)
+    {
+        key_state[key_index] = false;
     }
 
     bool draw_triggered()

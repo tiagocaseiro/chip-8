@@ -10,6 +10,8 @@ namespace chip8
     void init();
     void update();
     void load(const char* path);
+    void on_key_down(const int key);
+    void on_key_up(const int key_index);
     bool draw_triggered();
     const draw_buffer& gfx_buffer();
 }; // namespace chip8
