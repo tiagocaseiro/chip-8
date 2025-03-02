@@ -39,6 +39,25 @@ namespace chip8
 
     static unsigned char key[16];
 
+    unsigned char chip8_fontset[80] = {
+        0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+        0x20, 0x60, 0x20, 0x20, 0x70, // 1
+        0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+        0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+        0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+        0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+        0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+        0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+        0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+        0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+        0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+        0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+        0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+        0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+        0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+        0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+    };
+
     static constexpr auto PROGRAM_OFFSET = 0x200;
 
     static inline void clear_buffer(auto& buffer)
@@ -156,10 +175,23 @@ namespace chip8
 
     static inline void store_bcd(const opcode_t opcode)
     {
+        std::cout << __FUNCTION__ << std::endl;
+
         const register_t reg = get_first_register_from_opcode(opcode);
         memory[I]            = static_cast<unsigned char>(reg / 100); // hundreds digit
         memory[I + 1]        = static_cast<unsigned char>((reg - memory[I]) / 10);
         memory[I + 2]        = static_cast<unsigned char>(reg - memory[I] - memory[I + 1]);
+
+        next_instruction();
+    }
+
+    static inline void set_memory_address_to_character_sprite_address(const opcode_t opcode)
+    {
+        std::cout << __FUNCTION__ << std::endl;
+
+        const register_t font = get_first_register_from_opcode(opcode);
+
+        I = static_cast<unsigned short>(std::distance(&memory[font * 5], &memory[0]));
 
         next_instruction();
     }
@@ -179,6 +211,8 @@ namespace chip8
             std::out_of_range("Stack pointer decremented to outside the range of the stack");
         }
         pc = *sp; // Point pc to saved memory address
+
+        next_instruction();
     }
 
     static void clear_screen_and_return(const opcode_t opcode)
@@ -412,6 +446,8 @@ namespace chip8
         register_t rand = static_cast<register_t>(dist(rd));
 
         reg = static_cast<register_t>(rand & value);
+
+        next_instruction();
     }
 
     static void draw_sprite(const opcode_t opcode)
@@ -439,13 +475,26 @@ namespace chip8
         throw std::invalid_argument("Unsupported operation");
     }
 
+    static inline void set_delay_timer_to_register(const opcode_t opcode)
+    {
+        delay_timer = get_first_register_from_opcode(opcode);
+        next_instruction();
+    }
+
+    static inline void set_register_to_delay_timer(const opcode_t opcode)
+    {
+        register_t& reg = get_first_register_from_opcode(opcode);
+        reg             = delay_timer;
+        next_instruction();
+    }
+
     static void misc(const opcode_t opcode)
     {
         switch(get_value_from_opcode_nn(opcode))
         {
             case 0x07:
             {
-                throw std::invalid_argument("Unsupported operation");
+                set_register_to_delay_timer(opcode);
                 return;
             }
             case 0x0A:
@@ -455,7 +504,7 @@ namespace chip8
             }
             case 0x15:
             {
-                throw std::invalid_argument("Unsupported operation");
+                set_delay_timer_to_register(opcode);
                 return;
             }
             case 0x18:
@@ -470,7 +519,7 @@ namespace chip8
             }
             case 0x29:
             {
-                throw std::invalid_argument("Unsupported operation");
+                set_memory_address_to_character_sprite_address(opcode);
                 return;
             }
             case 0x33:
@@ -527,7 +576,9 @@ namespace chip8
 
         for(int i = 0; i < 80; i++)
         {
-            // memory[i] = chip8_fontset[i];
+            memory[i] = chip8_fontset[i];
+
+            std::memcpy(&memory, &chip8_fontset, sizeof chip8_fontset); // OK
         }
 
         // Reset timers
@@ -546,12 +597,16 @@ namespace chip8
         opcode_t opcode = static_cast<opcode_t>(first_half_opcode << 8 | second_half_opcode);
         auto f_index    = first_half_opcode >> 4;
         std::cout << "opcode: " << std::hex << opcode << std::endl;
+        if(f_index >= static_cast<int>(sizeof funcs))
+        {
+            throw std::invalid_argument("Unsupported operation");
+        }
         funcs[f_index](opcode);
         std::cout << "pc: " << pc << std::endl;
         std::cout << "I: " << I << std::endl;
         for(int i = 0; i != 15; i++)
         {
-            std::cout << "register" << i << ": " << static_cast<int>(V[i]) << std::endl;
+            std::cout << "register " << i << ": " << static_cast<int>(V[i]) << std::endl;
         }
         std::cout << "flag_register: " << static_cast<int>(flag_register) << std::endl;
         std::cout << std::endl;

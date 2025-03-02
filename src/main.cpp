@@ -95,8 +95,6 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[])
 SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event)
 {
 
-    chip8::update();
-
     auto* app = (AppContext*)appstate;
 
     ImGui_ImplSDL3_ProcessEvent(event);
@@ -110,6 +108,7 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event)
 
 SDL_AppResult SDL_AppIterate(void* appstate)
 {
+    chip8::update();
 
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
