@@ -79,7 +79,18 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event)
         app->app_quit = SDL_APP_SUCCESS;
     }
 
-    return SDL_APP_CONTINUE;
+    switch(event->type)
+    {
+        case SDL_EVENT_QUIT:
+            app->app_quit = SDL_APP_SUCCESS;
+            return SDL_APP_CONTINUE;
+        case SDL_EVENT_KEY_DOWN:
+            return SDL_APP_CONTINUE;
+        case SDL_EVENT_KEY_UP:
+            return SDL_APP_CONTINUE;
+        default:
+            return SDL_APP_CONTINUE;
+    }
 }
 
 SDL_AppResult SDL_AppIterate(void* appstate)
@@ -110,8 +121,7 @@ SDL_AppResult SDL_AppIterate(void* appstate)
                 SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
 
                 SDL_FRect pixel = {static_cast<float>(j * 20), static_cast<float>(i * 20), 20, 20};
-                // SDL_RenderFillRect(renderer, &pixel);
-                SDL_RenderRect(renderer, &pixel);
+                SDL_RenderFillRect(renderer, &pixel);
             }
         }
     }
