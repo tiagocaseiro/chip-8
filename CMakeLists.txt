@@ -20,12 +20,6 @@ add_executable(${EXECUTABLE_NAME})
 target_sources(${EXECUTABLE_NAME} 
 PRIVATE 
     src/main.cpp
-    imgui/imgui.cpp
-    imgui/imgui_draw.cpp 
-    imgui/imgui_tables.cpp 
-    imgui/imgui_widgets.cpp
-    imgui/backends/imgui_impl_sdl3.cpp 
-    imgui/backends/imgui_impl_sdlrenderer3.cpp
 )
 
 # Set C++ version
@@ -36,9 +30,6 @@ add_library(source src/chip8.cpp)
 target_compile_features(source PUBLIC cxx_std_20)
 
 target_compile_options(source PRIVATE /Wall /WX)
-
-target_include_directories(${EXECUTABLE_NAME} PUBLIC imgui)
-target_include_directories(${EXECUTABLE_NAME} PUBLIC imgui/backends)
 
 # Configure SDL by calling its CMake file.
 # we use EXCLUDE_FROM_ALL so that its install targets and configs don't

@@ -37,7 +37,9 @@ namespace chip8
     static stack_entry_t stack[STACK_SIZE];
     static stack_entry_t* sp = nullptr;
 
-    static unsigned char key[16];
+    static bool key_state[16];
+
+    static bool draw_this_frame = false;
 
     unsigned char chip8_fontset[80] = {
         0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
@@ -66,6 +68,11 @@ namespace chip8
         ranges::fill(buffer, ZERO);
     }
 
+    static unsigned char get_key_from_register(const register_t reg)
+    {
+        return static_cast<unsigned char>(reg & 0xF);
+    }
+
     static bool paint_row_pixels_at(const int x, const int y, unsigned char memory_row)
     {
         static constexpr auto ROW_WIDTH = 8;
@@ -74,7 +81,7 @@ namespace chip8
 
         for(auto i = 0; i != ROW_WIDTH; i++)
         {
-            static constexpr auto FIRST_PIXEL_POSITION = 1 << 8;
+            static constexpr auto FIRST_PIXEL_POSITION = 0x80;
 
             // Only entries with 1 require action
             if((memory_row & (FIRST_PIXEL_POSITION >> i)) == 0)
@@ -82,8 +89,9 @@ namespace chip8
                 continue;
             }
 
-            flipped |= gfx[y * 64 + x + i] == 1;
-            gfx[y * 64 + x + i] ^= 1;
+            const int index = y * 64 + x + i;
+            flipped |= gfx[index] == 1;
+            gfx[index] ^= 1;
         }
 
         return flipped;
@@ -101,15 +109,20 @@ namespace chip8
         auto index = opcode & 0x0F00;
         index >>= 8;
 
-        std::cout << "index " << index << std::endl;
+        std::cout << std::hex << "register " << index << " value " << static_cast<int>(V[index]) << std::endl;
 
         return V[index];
     }
 
     register_t& get_second_register_from_opcode(const opcode_t opcode)
     {
+        std::cout << __FUNCTION__ << std::endl;
+
         auto index = opcode & 0x00F0;
         index >>= 4;
+
+        std::cout << std::hex << "register " << index << " value " << static_cast<int>(V[index]) << std::endl;
+
         return V[index];
     }
 
@@ -140,6 +153,8 @@ namespace chip8
 
     void next_instruction()
     {
+        std::cout << __FUNCTION__ << std::endl;
+
         pc += 2;
     }
 
@@ -189,15 +204,22 @@ namespace chip8
     {
         std::cout << __FUNCTION__ << std::endl;
 
-        const register_t font = get_first_register_from_opcode(opcode);
+        const register_t reg = get_first_register_from_opcode(opcode);
 
-        I = static_cast<unsigned short>(std::distance(&memory[font * 5], &memory[0]));
+        const unsigned char key = get_key_from_register(reg);
+
+        std::cout << "key " << std::hex << static_cast<int>(key) << " " << &memory[0] << " " << &memory[key * 5]
+                  << std::endl;
+
+        I = static_cast<unsigned short>(std::distance(&memory[0], &memory[key * 5]));
 
         next_instruction();
     }
 
     void jump_next_instruction()
     {
+        std::cout << __FUNCTION__ << std::endl;
+
         pc += 4;
     }
 
@@ -334,28 +356,28 @@ namespace chip8
                 register_t& register_1      = get_first_register_from_opcode(opcode);
                 const register_t register_2 = get_second_register_from_opcode(opcode);
                 register_1                  = register_2;
-                return;
+                break;
             }
             case 0x1:
             {
                 register_t& register_1      = get_first_register_from_opcode(opcode);
                 const register_t register_2 = get_second_register_from_opcode(opcode);
                 register_1 |= register_2;
-                return;
+                break;
             }
             case 0x2:
             {
                 register_t& register_1      = get_first_register_from_opcode(opcode);
                 const register_t register_2 = get_second_register_from_opcode(opcode);
                 register_1 &= register_2;
-                return;
+                break;
             }
             case 0x3:
             {
                 register_t& register_1      = get_first_register_from_opcode(opcode);
                 const register_t register_2 = get_second_register_from_opcode(opcode);
                 register_1 ^= register_2;
-                return;
+                break;
             }
             case 0x4:
             {
@@ -370,10 +392,12 @@ namespace chip8
                 if(is_overflow)
                 {
                     flag_register = 1;
-                    return;
                 }
-                flag_register = 0;
-                return;
+                else
+                {
+                    flag_register = 0;
+                }
+                break;
             }
             case 0x5:
             {
@@ -386,10 +410,12 @@ namespace chip8
                 if(is_underflow)
                 {
                     flag_register = 0;
-                    return;
                 }
-                flag_register = 1;
-                return;
+                else
+                {
+                    flag_register = 1;
+                }
+                break;
             }
             case 0x6:
             {
@@ -404,8 +430,7 @@ namespace chip8
                 throw std::invalid_argument("Unsupported operation");
             }
         }
-
-        return;
+        next_instruction();
     }
 
     static void jump_if_registers_not_equal(const opcode_t opcode)
@@ -456,27 +481,102 @@ namespace chip8
 
     static void draw_sprite(const opcode_t opcode)
     {
+        draw_this_frame = true;
         std::cout << __FUNCTION__ << std::endl;
         const int x      = get_first_register_from_opcode(opcode);
         int y            = get_second_register_from_opcode(opcode);
         const int height = get_value_from_opcode_n(opcode);
-        std::cout << x << " " << y << " " << height << std::endl;
+        std::cout << std::dec << "x: " << x << " y: " << y << " h: " << height << std::endl;
 
         bool pixel_flipped = false;
         for(auto i = 0; i != height; i++)
         {
-            pixel_flipped |= paint_row_pixels_at(x, y, memory[I + i]);
+            const int index = I + i;
+            if(index >= static_cast<int>(sizeof memory))
+            {
+                std::out_of_range("Pointing out of memory range");
+            }
+            pixel_flipped |= paint_row_pixels_at(x, y, memory[index]);
             y++;
         }
 
         flag_register = pixel_flipped;
+        // auto k        = 0;
+        // for(int i = 0; i != 32; i++)
+        // {
+        //     std::cout << 10000000 + k << "      ";
+        //     for(int j = 0; j != 64; j++)
+        //     {
+        //         // if(int(gfx[k]) == 1)
+        //         // {
+
+        //         std::cout << int(gfx[k]) << " ";
+        //         // }
+        //         // else
+        //         // {
+        //         //     std::cout << " " << " ";
+        //         // }
+        //         k++;
+        //     }
+        //     std::cout << std::endl;
+        // }
 
         next_instruction();
     }
 
-    static void skip_by_key(const opcode_t /*opcode*/)
+    static bool key_is_pressed(unsigned char key)
     {
-        throw std::invalid_argument("Unsupported operation");
+        return key_state[key];
+    }
+
+    static void jump_if_key_pressed(const opcode_t opcode)
+    {
+        std::cout << __FUNCTION__ << std::endl;
+
+        const register_t reg    = get_first_register_from_opcode(opcode);
+        const unsigned char key = get_key_from_register(reg);
+
+        if(key_is_pressed(key))
+        {
+            jump_next_instruction();
+            return;
+        }
+        next_instruction();
+    }
+
+    static void jump_if_key_not_pressed(const opcode_t opcode)
+    {
+        std::cout << __FUNCTION__ << std::endl;
+
+        const register_t reg    = get_first_register_from_opcode(opcode);
+        const unsigned char key = get_key_from_register(reg);
+
+        if(key_is_pressed(key) == false)
+        {
+            jump_next_instruction();
+            return;
+        }
+        next_instruction();
+    }
+
+    static void jump_by_key(const opcode_t opcode)
+    {
+        switch(get_value_from_opcode_nn(opcode))
+        {
+            case 0x9E:
+                jump_if_key_pressed(opcode);
+                break;
+            case 0xA1:
+                jump_if_key_not_pressed(opcode);
+                break;
+            default:
+                break;
+        }
+    }
+    static inline void set_sound_timer_to_register(const opcode_t opcode)
+    {
+        sound_timer = get_first_register_from_opcode(opcode);
+        next_instruction();
     }
 
     static inline void set_delay_timer_to_register(const opcode_t opcode)
@@ -513,7 +613,7 @@ namespace chip8
             }
             case 0x18:
             {
-                throw std::invalid_argument("Unsupported operation");
+                set_sound_timer_to_register(opcode);
                 return;
             }
             case 0x1E:
@@ -559,7 +659,7 @@ namespace chip8
         jump_to_address,                       // B
         set_register_to_bitwise_and_of_random, // C
         draw_sprite,                           // D
-        skip_by_key,                           // E
+        jump_by_key,                           // E
         misc                                   // F
     };
 
@@ -594,6 +694,7 @@ namespace chip8
     {
         std::cout << "############## UPDATE ##############" << std::endl;
 
+        draw_this_frame = false;
         // Fetch Opcode
         auto first_half_opcode  = memory[pc];
         auto second_half_opcode = memory[pc + 1];
@@ -638,6 +739,11 @@ namespace chip8
         begin += PROGRAM_OFFSET;
         std::streamsize max_count = sizeof(memory) - PROGRAM_OFFSET;
         is.read(reinterpret_cast<char*>(begin), max_count);
+    }
+
+    bool draw_triggered()
+    {
+        return draw_this_frame;
     }
 
     const draw_buffer& gfx_buffer()

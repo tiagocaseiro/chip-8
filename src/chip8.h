@@ -10,5 +10,6 @@ namespace chip8
     void init();
     void update();
     void load(const char* path);
+    bool draw_triggered();
     const draw_buffer& gfx_buffer();
 }; // namespace chip8
